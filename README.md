@@ -6,25 +6,26 @@ A hands-on Java 21 study project covering every major distributed-systems concep
 
 ## What's Inside
 
-| Package | Class | Concept |
-|---|---|---|
-| `model` | `Node` | Node roles, quorum formula, master-eligible nodes |
-| `model` | `ShardRouting` | Primary/replica model, ISR, seqNo, primaryTerm, shard lifecycle |
-| `model` | `ClusterState` | Immutable state, two-phase commit publication, builder pattern |
-| `service` | `RaftLeaderElection` | Raft consensus — terms, roles, voting, heartbeats, split-brain avoidance |
-| `service` | `ShardAllocationService` | Allocation constraints, same-node exclusion, Murmur3 routing hash, ISR promotion |
-| `service` | `ConcurrentIndexingService` | `StampedLock`, `LongAdder`, optimistic CAS, `Callable`-based replica fan-out |
-| `util` | `TranslogWriter` | Write-ahead log, fsync strategy, CRC frames, crash-recovery replay |
-| `util` | `AsyncNetworkChannel` | Netty request/response correlation, timeout scheduling, backpressure |
-| `client` | `ElasticsearchClientFactory` | Official Java client lifecycle, connection pooling, auth |
-| `config` | `ElasticsearchConfig` | Environment-based configuration record |
-| — | `Main` | End-to-end wiring demo — runs the full lifecycle |
+| Package   | Class                        | Concept                                                                          |
+| --------- | ---------------------------- | -------------------------------------------------------------------------------- |
+| `model`   | `Node`                       | Node roles, quorum formula, master-eligible nodes                                |
+| `model`   | `ShardRouting`               | Primary/replica model, ISR, seqNo, primaryTerm, shard lifecycle                  |
+| `model`   | `ClusterState`               | Immutable state, two-phase commit publication, builder pattern                   |
+| `service` | `RaftLeaderElection`         | Raft consensus — terms, roles, voting, heartbeats, split-brain avoidance         |
+| `service` | `ShardAllocationService`     | Allocation constraints, same-node exclusion, Murmur3 routing hash, ISR promotion |
+| `service` | `ConcurrentIndexingService`  | `StampedLock`, `LongAdder`, optimistic CAS, `Callable`-based replica fan-out     |
+| `util`    | `TranslogWriter`             | Write-ahead log, fsync strategy, CRC frames, crash-recovery replay               |
+| `util`    | `AsyncNetworkChannel`        | Netty request/response correlation, timeout scheduling, backpressure             |
+| `client`  | `ElasticsearchClientFactory` | Official Java client lifecycle, connection pooling, auth                         |
+| `config`  | `ElasticsearchConfig`        | Environment-based configuration record                                           |
+| —         | `Main`                       | End-to-end wiring demo — runs the full lifecycle                                 |
 
 ---
 
 ## Key Concepts Covered
 
 ### Raft Consensus (`RaftLeaderElection`)
+
 - Three roles: **FOLLOWER → CANDIDATE → LEADER**
 - Randomised election timeouts to prevent split-vote
 - Term-based epoch: any message with a higher term causes an immediate step-down
@@ -38,6 +39,7 @@ faultTolerance = ⌊(N - 1) / 2⌋
 ```
 
 ### Shard Allocation (`ShardAllocationService`)
+
 - Hard constraint: primary and replica of the same shard **never** on the same node
 - ISR promotion on primary failure (replica with highest seqNo wins)
 - Document routing via consistent hash:
@@ -50,6 +52,7 @@ targetShard = |Murmur3(routing_value)| % num_primary_shards
 - Disk threshold watermarking and rebalance throttling
 
 ### Concurrent Indexing (`ConcurrentIndexingService`)
+
 - `StampedLock` — optimistic reads (no lock overhead on the hot path) with fallback to pessimistic read lock
 - `AtomicLong` seqNo generator — single CAS instruction, lock-free
 - `LongAdder` ops counter — stripe-sharded to eliminate CAS contention under parallel writes
@@ -58,6 +61,7 @@ targetShard = |Murmur3(routing_value)| % num_primary_shards
 - Optimistic concurrency control: `if_seq_no` + `if_primary_term`
 
 ### Translog (`TranslogWriter`)
+
 - Write-ahead log appended **before** the client is acknowledged
 - Frame format: `seqNo(8) | primaryTerm(8) | bodyLen(4) | body | CRC32(4)`
 - `syncOnWrite=true` → `FileChannel.force()` per request (durability = request mode)
@@ -65,12 +69,14 @@ targetShard = |Murmur3(routing_value)| % num_primary_shards
 - CRC mismatch on trailing entry = partial write from a crash → safe truncation
 
 ### Async Networking (`AsyncNetworkChannel`)
+
 - Netty's fire-and-forget + correlation map pattern
 - Every request gets a unique `requestId`; a `CompletableFuture` is stored in a `ConcurrentHashMap`
 - Response frame completes the future; timeout callback on the event loop cleans it up
 - Mirrors `TransportService#sendRequest` + `PendingResponseHandlers` in ES source
 
 ### Cluster State (`ClusterState`)
+
 - Fully immutable Java `record` with deep defensive copies
 - Only the elected master produces a new state (via `Builder`)
 - Version is monotonically increasing — stale states are silently ignored
@@ -117,6 +123,7 @@ mvn exec:java -Dexec.mainClass="com.elasticsearch.distributed.Main"
 ```
 
 The demo output walks through:
+
 1. 3-node cluster bootstrap
 2. Raft election simulation
 3. Index allocation (3 primaries × 1 replica)
