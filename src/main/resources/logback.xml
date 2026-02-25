@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+  <!-- ── Properties ─────────────────────────────────────────────────────── -->
+  <property name="LOG_LEVEL" value="${LOG_LEVEL:-INFO}" />
+  <property name="APP_NAME"  value="elasticsearch-distributed" />
+
+  <!-- ── Console appender (human-readable for local dev) ────────────────── -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{index} %X{operation}] - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- ── Rolling file appender ──────────────────────────────────────────── -->
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>logs/${APP_NAME}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+      <fileNamePattern>logs/${APP_NAME}-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+      <maxFileSize>50MB</maxFileSize>
+      <maxHistory>14</maxHistory>
+      <totalSizeCap>500MB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} [%X{index} %X{operation} %X{node}] - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- ── Async wrapper (non-blocking) ───────────────────────────────────── -->
+  <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>512</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <appender-ref ref="FILE" />
+  </appender>
+
+  <!-- ── Logger levels ──────────────────────────────────────────────────── -->
+  <logger name="com.elasticsearch.distributed" level="${LOG_LEVEL}" />
+  <logger name="co.elastic.clients"             level="WARN" />
+  <logger name="org.elasticsearch.client"       level="WARN" />
+  <logger name="org.apache.http"                level="WARN" />
+  <logger name="org.apache.hc"                  level="WARN" />
+
+  <!-- ── Root logger ────────────────────────────────────────────────────── -->
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"    />
+    <appender-ref ref="ASYNC_FILE" />
+  </root>
+
+</configuration>

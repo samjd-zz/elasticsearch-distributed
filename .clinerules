@@ -1,0 +1,222 @@
+# .clinerules — Agent reference for elasticsearch-distributed (Java 21)
+
+# ════════════════════════════════════════════════════════════════════════════
+
+# Read this file before modifying any source code.
+
+# All rules apply to every agent working in this repository.
+
+# ════════════════════════════════════════════════════════════════════════════
+
+## 0. Project snapshot
+
+- **Language**: Java 21 (LTS)
+- **Build**: Maven 3.9+
+- **Main dependency**: Elasticsearch Java Client 8.x (`co.elastic.clients:elasticsearch-java`)
+- **Target**: Distributed Elasticsearch integration service
+- **Package root**: `com.elasticsearch.distributed`
+- **Source layout**: standard Maven (`src/main/java`, `src/test/java`)
+
+---
+
+## 1. Java 21 – language rules
+
+### Use modern language features
+
+- Prefer **records** for immutable data carriers (index models, request/response DTOs).
+- Prefer **sealed classes + pattern matching `switch`** for typed result hierarchies
+  (e.g. `SearchResult`, `IndexResult`).
+- Use **text blocks** for multi-line JSON templates or query DSL strings.
+- Use **`var`** for local variables when the type is obvious from the RHS.
+- Do **NOT** use raw types, unchecked casts, or `@SuppressWarnings("unchecked")`
+  without a comment explaining why it is safe.
+
+### Virtual threads (Project Loom)
+
+- All I/O-bound operations (Elasticsearch calls, HTTP) **must** use virtual threads
+  via `Executors.newVirtualThreadPerTaskExecutor()` or structured-concurrency
+  `StructuredTaskScope` where result fan-in is needed.
+- Do NOT use platform-thread pools for blocking ES calls — they will exhaust threads
+  under load.
+- Name virtual threads: `Thread.ofVirtual().name("es-query-", 0).factory()`.
+
+### Structured concurrency (`java.util.concurrent.StructuredTaskScope`)
+
+- Use `ShutdownOnFailure` scope when all sub-tasks must succeed together.
+- Use `ShutdownOnSuccess` scope for racing concurrent ES node queries.
+- Always close scopes in a `try-with-resources` block.
+
+### Generics & null safety
+
+- Return `Optional<T>` from methods that may produce no value; never return `null`.
+- Use `@Nullable` / `@NonNull` (from `org.jspecify`) on public API method parameters
+  and return types.
+- Prefer `Objects.requireNonNull(x, "x must not be null")` for guard clauses.
+
+---
+
+## 2. Elasticsearch client rules
+
+### Client lifecycle
+
+- Create **one** `ElasticsearchClient` per application; inject via constructor DI.
+- Back the client with a connection pool configured in
+  `com.elasticsearch.distributed.config.ElasticsearchConfig`.
+- Always close the underlying `RestClient` (and transport) in a shutdown hook or
+  `@PreDestroy`-equivalent.
+
+### Indexing
+
+- Use **bulk API** for batches of ≥ 2 documents; never loop individual `index` calls.
+- Set `refresh=false` on bulk calls unless you specifically need read-after-write.
+- Always inspect `BulkResponse.errors()` and log/retry failed items individually.
+
+### Searching
+
+- Specify only the fields you need via `sourceFilter` / `fields` to reduce payload.
+- Paginate with **search_after + PIT** (point-in-time) for deep pagination; avoid
+  `from/size` beyond 10,000 hits.
+- Set explicit `timeout` on every search request (default: `"30s"`).
+- Parse hits through the typed `ObjectMapper`-backed deserialization; never parse
+  raw JSON strings manually.
+
+### Error handling
+
+- Wrap every ES call with **Resilience4j CircuitBreaker + Retry**:
+  - Circuit opens after 5 consecutive failures.
+  - Retry: 3 attempts, exponential back-off (100 ms base, 2× multiplier, 2 s cap).
+- `ElasticsearchException` → log at WARN; rethrow as domain exception.
+- `IOException` / connection errors → handled by retry; after exhaustion log at ERROR.
+
+### Mappings & indices
+
+- Define index mappings in JSON files under `src/main/resources/mappings/`.
+- Never use dynamic mapping (`"dynamic": "strict"` always).
+- Use `@JsonProperty` and Jackson for all document POJOs; prefer records.
+
+---
+
+## 3. Distributed systems patterns
+
+### Idempotency
+
+- All write operations (index, update, delete) must be idempotent.
+- Use document `_id` derived from a deterministic hash of business keys.
+
+### Backpressure
+
+- Expose a `RateLimiter` (Resilience4j) in front of bulk indexing to avoid
+  overwhelming the ES cluster under burst load.
+
+### Observability
+
+- Every public service method must emit a Micrometer `Timer` and `Counter`.
+- Use MDC fields `index`, `operation`, `node` on all log statements inside ES calls.
+- Use structured logging (logback JSON encoder) in production profiles.
+
+### Configuration
+
+- All connection parameters (hosts, ports, credentials, TLS) must come from
+  environment variables or a properties file — **never hardcode**.
+- Prefer `System.getenv()` with a fallback to `application.properties`.
+
+---
+
+## 4. Testing rules
+
+### Unit tests
+
+- Test class names: `<Subject>Test` in the same package under `src/test/java`.
+- Use **JUnit 5** (`@Test`, `@ParameterizedTest`, `@ExtendWith(MockitoExtension.class)`).
+- Use **Mockito** to mock `ElasticsearchClient` at the service layer.
+- Use **AssertJ** fluent assertions; avoid JUnit `assertEquals`.
+- Aim for **≥ 70 % line coverage** (enforced by JaCoCo at `mvn verify`).
+
+### Integration tests
+
+- Class names: `<Subject>IT`, activated by `mvn verify -Pintegration-tests`.
+- Use **Testcontainers** (`ElasticsearchContainer`) — never mock the ES client in ITs.
+- Annotate with `@Testcontainers` and `@Container` (static) for container reuse.
+- Each IT must create and delete its own index to avoid inter-test pollution.
+
+---
+
+## 5. Code style & formatting
+
+- **Indentation**: 4 spaces; no tabs.
+- **Max line length**: 120 characters.
+- **Imports**: no wildcards except static; auto-organised on save (threshold 5 / 3).
+- **Javadoc**: all `public` classes and methods in `service` and `client` packages
+  must have Javadoc. Package-private and test code: optional.
+- **Naming**:
+  - Classes/interfaces: `UpperCamelCase`
+  - Methods/variables: `lowerCamelCase`
+  - Constants: `UPPER_SNAKE_CASE`
+  - Records: `UpperCamelCase`; component accessors stay as-declared (no `get` prefix)
+- Do NOT leave TODO/FIXME comments without a linked issue or explanation.
+
+---
+
+## 6. Build & dependency management
+
+- **All dependency versions** are declared in `<properties>` in `pom.xml`; never
+  hardcode versions inside `<dependency>` blocks.
+- Do NOT add a new dependency without confirming it is not already transitively
+  provided by an existing dependency (`mvn dependency:tree`).
+- Do NOT upgrade Elasticsearch client and server versions independently; they must
+  match the same minor version.
+- Run `mvn verify -Pstatic-analysis` before opening a PR.
+
+---
+
+## 7. Performance guidelines
+
+### JVM tuning (runtime)
+
+- Production JVM flags: `-XX:+UseZGC -XX:+ZGenerational -Xms<heap> -Xmx<heap>`
+- Heap: set `-Xms` == `-Xmx` in production to avoid resize pauses.
+- Recommended production heap for this service: **1–2 GB** (depends on batch size).
+- Do NOT use `-XX:+UseG1GC` or CMS; ZGC is mandatory for this project.
+
+### Elasticsearch client
+
+- Increase `httpclient5` connection pool:
+  - `maxConnTotal`: 200
+  - `maxConnPerRoute`: 20
+- Set socket/connect/response timeouts explicitly; do not rely on defaults.
+
+### Batching
+
+- Default bulk batch size: **500 documents** or **5 MB**, whichever comes first.
+- Tune via `es.bulk.batch-size` property; never hard-code the number.
+
+---
+
+## 8. Security
+
+- Never log Elasticsearch credentials, API keys, or PII fields.
+- Use TLS for all ES connections in non-local environments; validate server cert.
+- Store API keys in environment variables; document required env vars in `README.md`.
+- Honour `_source_excludes` to strip sensitive fields from search responses before
+  returning them to callers.
+
+---
+
+## 9. Git & PR conventions
+
+- Branch naming: `feat/`, `fix/`, `chore/`, `refactor/` prefixes.
+- Commit messages: imperative mood, ≤ 72 chars subject line.
+- Every PR must pass `mvn verify` (unit tests + JaCoCo coverage gate) in CI.
+- Do NOT commit generated files (`target/`, `*.class`, `*.jar`).
+
+---
+
+## 10. Agents: what NOT to do
+
+- Do NOT add Spring Boot, Quarkus, or any DI framework — this is a plain Java service.
+- Do NOT introduce Lombok; use records and IDE generation instead.
+- Do NOT use `System.out.println`; always use SLF4J logger.
+- Do NOT catch `Exception` broadly; catch specific exception types.
+- Do NOT return mutable collections from public APIs; wrap in `Collections.unmodifiableList()` or return `List.copyOf()`.
+- Do NOT create God classes > 300 lines; split responsibility.
+- Do NOT skip `ElasticsearchConfig` and create clients ad-hoc in service classes.

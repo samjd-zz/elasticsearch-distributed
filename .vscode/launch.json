@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run Main",
+      "request": "launch",
+      "mainClass": "com.elasticsearch.distributed.Main",
+      "projectName": "elasticsearch-distributed",
+      "vmArgs": "-Xms256m -Xmx1g -XX:+UseZGC -XX:+ZGenerational -Dfile.encoding=UTF-8",
+      "env": {
+        "ES_HOST": "localhost",
+        "ES_PORT": "9200"
+      }
+    },
+    {
+      "type": "java",
+      "name": "Debug Main",
+      "request": "launch",
+      "mainClass": "com.elasticsearch.distributed.Main",
+      "projectName": "elasticsearch-distributed",
+      "vmArgs": "-Xms256m -Xmx1g -XX:+UseZGC -XX:+ZGenerational -Dfile.encoding=UTF-8 -ea",
+      "env": {
+        "ES_HOST": "localhost",
+        "ES_PORT": "9200"
+      }
+    },
+    {
+      "type": "java",
+      "name": "Current File",
+      "request": "launch",
+      "mainClass": "${file}",
+      "vmArgs": "-Xms128m -Xmx512m -XX:+UseZGC -XX:+ZGenerational"
+    }
+  ]
+}
