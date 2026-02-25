@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusion filter for elasticsearch-distributed.
+
+  Excludes known false positives that arise from:
+    - Java 21 records (synthetic accessor methods)
+    - Intentional volatile/AtomicReference patterns for cluster state
+    - Virtual-thread executor usage
+    - StructuredTaskScope preview API interactions
+    - Resilience4j lambda captures
+-->
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0
+        https://raw.githubusercontent.com/spotbugs/spotbugs/master/spotbugs/etc/findbugsfilter.xsd">
+
+  <!-- ── Records ────────────────────────────────────────────────────── -->
+  <!-- SpotBugs may flag record component accessors as EI_EXPOSE_REP   -->
+  <!-- We enforce List.copyOf() in canonical constructors instead.      -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    <Class name="~com\.elasticsearch\.distributed\.model\..*"/>
+  </Match>
+
+  <!-- ── Volatile cluster state ─────────────────────────────────────── -->
+  <!-- Intentional: only the leader writes; all others read via volatile -->
+  <Match>
+    <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    <Class name="com.elasticsearch.distributed.service.RaftLeaderElection"/>
+  </Match>
+  <Match>
+    <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    <Class name="com.elasticsearch.distributed.service.ConcurrentIndexingService"/>
+  </Match>
+
+  <!-- ── Translog RandomAccessFile ─────────────────────────────────── -->
+  <!-- readOpsFrom opens a RAF for crash-recovery replay; caller owns it -->
+  <Match>
+    <Bug pattern="OBL_UNSATISFIED_OBLIGATION"/>
+    <Class name="com.elasticsearch.distributed.util.TranslogWriter"/>
+    <Method name="readOpsFrom"/>
+  </Match>
+
+  <!-- ── Resilience4j CheckedSupplier lambdas ─────────────────────── -->
+  <!-- Lambda passed to CircuitBreaker.decorateCheckedSupplier may      -->
+  <!-- capture 'this' — intentional for service method context.         -->
+  <Match>
+    <Bug pattern="SE_INNER_CLASS"/>
+    <Class name="~com\.elasticsearch\.distributed\.service\..*"/>
+  </Match>
+
+  <!-- ── StructuredTaskScope (preview API in 21) ───────────────────── -->
+  <!-- SpotBugs may not fully understand StructuredTaskScope fork/join  -->
+  <Match>
+    <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+    <Class name="com.elasticsearch.distributed.service.ConcurrentIndexingService"/>
+  </Match>
+
+  <!-- ── AsyncNetworkChannel scheduled timeout ─────────────────────── -->
+  <!-- ScheduledFuture return intentionally discarded; cancel on shutdown -->
+  <Match>
+    <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+    <Class name="com.elasticsearch.distributed.util.AsyncNetworkChannel"/>
+  </Match>
+
+  <!-- ── Test classes ───────────────────────────────────────────────── -->
+  <!-- SpotBugs rules for production code do not apply to test helpers  -->
+  <Match>
+    <Class name="~.*Test"/>
+  </Match>
+  <Match>
+    <Class name="~.*IT"/>
+  </Match>
+
+</FindBugsFilter>

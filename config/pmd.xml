@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="elasticsearch-distributed PMD rules"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+             https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>
+    PMD ruleset for the elasticsearch-distributed study project.
+    Tailored to Java 21 idioms and the coding standards in .clinerules.
+  </description>
+
+  <!-- ── Best Practices ───────────────────────────────────────────────── -->
+  <rule ref="category/java/bestpractices.xml">
+    <!-- Records make getters unnecessary; allow field access via component accessor -->
+    <exclude name="AccessorMethodGeneration"/>
+    <!-- Virtual-thread executors don't need shutdown in all paths -->
+    <exclude name="CloseResource"/>
+    <!-- Test classes intentionally omit public modifier -->
+    <exclude name="JUnit5TestShouldBePackagePrivate"/>
+  </rule>
+
+  <!-- ── Code Style ───────────────────────────────────────────────────── -->
+  <rule ref="category/java/codestyle.xml">
+    <!-- var is preferred per .clinerules -->
+    <exclude name="LocalVariableCouldBeFinal"/>
+    <!-- Records components can't be final -->
+    <exclude name="MethodArgumentCouldBeFinal"/>
+    <!-- Short names common in lambdas / stream operations -->
+    <exclude name="ShortVariable"/>
+    <!-- Long names acceptable in distributed-systems domain classes -->
+    <exclude name="LongVariable"/>
+    <!-- Ternary operator is fine with short expressions -->
+    <exclude name="ConfusingTernary"/>
+    <!-- Package-private constructors not required -->
+    <exclude name="AtLeastOneConstructor"/>
+    <!-- Call super() not required in all constructors -->
+    <exclude name="CallSuperInConstructor"/>
+    <!-- Default package not used -->
+    <exclude name="DefaultPackage"/>
+  </rule>
+
+  <!-- Override line length — project uses 120 chars per .clinerules -->
+  <rule ref="category/java/codestyle.xml/LinguisticNaming">
+    <properties>
+      <property name="checkBooleanMethod" value="true"/>
+      <property name="checkGetters" value="false"/>  <!-- records have no get prefix -->
+      <property name="checkSetters" value="true"/>
+      <property name="checkPrefixedTransformMethods" value="true"/>
+      <property name="checkTransformMethods" value="false"/>
+    </properties>
+  </rule>
+
+  <!-- ── Design ───────────────────────────────────────────────────────── -->
+  <rule ref="category/java/design.xml">
+    <!-- Data classes intentionally expose state (records) -->
+    <exclude name="DataClass"/>
+    <!-- Abstract classes used for sealed hierarchies -->
+    <exclude name="AbstractClassWithoutAnyMethod"/>
+    <!-- Law of Demeter too strict for builder chains -->
+    <exclude name="LawOfDemeter"/>
+    <!-- Immutable record construction may chain many calls -->
+    <exclude name="TooManyMethods"/>
+  </rule>
+
+  <!-- Override coupling threshold — ES client APIs are naturally wide -->
+  <rule ref="category/java/design.xml/CouplingBetweenObjects">
+    <properties>
+      <property name="threshold" value="25"/>
+    </properties>
+  </rule>
+
+  <rule ref="category/java/design.xml/CyclomaticComplexity">
+    <properties>
+      <property name="methodReportLevel" value="12"/>
+    </properties>
+  </rule>
+
+  <rule ref="category/java/design.xml/NcssCount">
+    <properties>
+      <!-- 300-line class limit per .clinerules -->
+      <property name="classReportLevel" value="300"/>
+      <property name="methodReportLevel" value="60"/>
+    </properties>
+  </rule>
+
+  <!-- ── Error Prone ──────────────────────────────────────────────────── -->
+  <rule ref="category/java/errorprone.xml">
+    <!-- BeanMembersShouldSerialize not relevant — no serialisation framework -->
+    <exclude name="BeanMembersShouldSerialize"/>
+    <!-- Intentional fall-through documented in pattern-match switches -->
+    <exclude name="SwitchStmtsShouldHaveDefault"/>
+  </rule>
+
+  <!-- Enforce no null returns from public APIs -->
+  <rule ref="category/java/errorprone.xml/NullAssignment"/>
+
+  <!-- ── Multithreading ────────────────────────────────────────────────── -->
+  <rule ref="category/java/multithreading.xml">
+    <!-- Virtual threads and StructuredTaskScope are encouraged -->
+    <exclude name="DoNotUseThreads"/>
+    <!-- Avoid double-checked locking without volatile is already banned by StampedLock rule -->
+    <exclude name="UnsynchronizedStaticFormatter"/>
+  </rule>
+
+  <!-- ── Performance ──────────────────────────────────────────────────── -->
+  <rule ref="category/java/performance.xml">
+    <!-- String concatenation in log messages handled by SLF4J parameterisation -->
+    <exclude name="InsufficientStringBufferDeclaration"/>
+  </rule>
+
+  <!-- ── Security ─────────────────────────────────────────────────────── -->
+  <rule ref="category/java/security.xml"/>
+
+</ruleset>

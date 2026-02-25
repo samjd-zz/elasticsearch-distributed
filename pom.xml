@@ -42,6 +42,7 @@
     <maven.shade.plugin.version>3.5.2</maven.shade.plugin.version>
     <spotbugs.plugin.version>4.8.3.1</spotbugs.plugin.version>
     <checkstyle.plugin.version>3.3.1</checkstyle.plugin.version>
+    <pmd.plugin.version>3.21.2</pmd.plugin.version>
     <jacoco.plugin.version>0.8.11</jacoco.plugin.version>
   </properties>
 
@@ -313,6 +314,44 @@
           </executions>
         </plugin>
 
+        <!-- Checkstyle: style and Javadoc enforcement -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-checkstyle-plugin</artifactId>
+          <version>${checkstyle.plugin.version}</version>
+          <configuration>
+            <configLocation>config/checkstyle.xml</configLocation>
+            <consoleOutput>true</consoleOutput>
+            <failsOnError>true</failsOnError>
+            <includeTestSourceDirectory>false</includeTestSourceDirectory>
+            <encoding>UTF-8</encoding>
+          </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>com.puppycrawl.tools</groupId>
+              <artifactId>checkstyle</artifactId>
+              <version>10.14.0</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+
+        <!-- PMD: code quality and error-prone pattern detection -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-pmd-plugin</artifactId>
+          <version>${pmd.plugin.version}</version>
+          <configuration>
+            <rulesets>
+              <ruleset>config/pmd.xml</ruleset>
+            </rulesets>
+            <targetJdk>21</targetJdk>
+            <failOnViolation>true</failOnViolation>
+            <printFailingErrors>true</printFailingErrors>
+            <includeTests>false</includeTests>
+            <linkXRef>false</linkXRef>
+          </configuration>
+        </plugin>
+
         <!-- SpotBugs: static analysis -->
         <plugin>
           <groupId>com.github.spotbugs</groupId>
@@ -322,6 +361,7 @@
             <effort>Max</effort>
             <threshold>Medium</threshold>
             <xmlOutput>true</xmlOutput>
+            <excludeFilterFile>config/spotbugs-exclude.xml</excludeFilterFile>
           </configuration>
         </plugin>
 
@@ -360,21 +400,51 @@
       </build>
     </profile>
 
-    <!-- mvn verify -Pstatic-analysis -->
+    <!-- mvn verify -Pstatic-analysis -DskipTests -->
     <profile>
       <id>static-analysis</id>
       <build>
         <plugins>
+
           <plugin>
-            <groupId>com.github.spotbugs</groupId>
-            <artifactId>spotbugs-maven-plugin</artifactId>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-checkstyle-plugin</artifactId>
             <executions>
               <execution>
+                <id>checkstyle-verify</id>
                 <phase>verify</phase>
                 <goals><goal>check</goal></goals>
               </execution>
             </executions>
           </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-pmd-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>pmd-verify</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>check</goal>
+                  <goal>cpd-check</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <plugin>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>spotbugs-verify</id>
+                <phase>verify</phase>
+                <goals><goal>check</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+
         </plugins>
       </build>
     </profile>
